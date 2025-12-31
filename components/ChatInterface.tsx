@@ -243,7 +243,7 @@ export default function ChatInterface({ initialQuestion, onClearInitial }: ChatI
             onKeyDown={handleKeyDown}
             placeholder="اكتب سؤالك هنا..."
             rows={1}
-            className="w-full px-5 py-4 pr-14 rounded-2xl bg-white border border-stone-200 focus:border-rose-300 focus:ring-2 focus:ring-rose-100 outline-none resize-none text-stone-800 placeholder-stone-400 text-sm"
+            className="w-full px-5 py-4 pl-14 rounded-2xl bg-white border border-stone-200 focus:border-rose-300 focus:ring-2 focus:ring-rose-100 outline-none resize-none text-stone-800 placeholder-stone-400 text-sm"
             dir="rtl"
             disabled={isLoading}
           />

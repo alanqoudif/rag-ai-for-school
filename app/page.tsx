@@ -29,7 +29,11 @@ export default function Home() {
 
   return (
     <main className="min-h-screen gradient-bg">
-      <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+      <Sidebar 
+        isOpen={sidebarOpen} 
+        onToggle={() => setSidebarOpen(!sidebarOpen)} 
+        hideToggle={hasStartedChat}
+      />
 
       <div className={`min-h-screen flex flex-col transition-all duration-300 ${sidebarOpen ? 'lg:mr-72' : ''}`}>
         {!hasStartedChat ? (
@@ -38,7 +42,7 @@ export default function Home() {
             {/* Logo */}
             <div className="text-center mb-12 animate-float">
               <div className="flex items-center justify-center gap-3 mb-4">
-                <h1 className="text-6xl md:text-7xl font-bold text-stone-800 tracking-tight">
+                <h1 className="text-4xl md:text-7xl font-bold text-stone-800 tracking-tight">
                   ادمشن
                 </h1>
                 <span className="px-3 py-1 text-sm font-medium bg-stone-200/80 text-stone-600 rounded-full">
@@ -112,15 +116,26 @@ export default function Home() {
             {/* Header */}
             <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-xl border-b border-stone-200/50 px-4 py-3">
               <div className="max-w-4xl mx-auto flex items-center justify-between">
-                <button
-                  onClick={() => setHasStartedChat(false)}
-                  className="flex items-center gap-2 text-stone-600 hover:text-stone-800 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                  </svg>
-                  <span className="text-sm font-medium">الرئيسية</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setSidebarOpen(true)}
+                    className="p-2 rounded-lg hover:bg-stone-100 text-stone-600 transition-colors lg:hidden"
+                    aria-label="فتح القائمة"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setHasStartedChat(false)}
+                    className="flex items-center gap-2 text-stone-600 hover:text-stone-800 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    <span className="text-sm font-medium hidden sm:inline">الرئيسية</span>
+                  </button>
+                </div>
                 
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-bold text-stone-800">ادمشن</h1>

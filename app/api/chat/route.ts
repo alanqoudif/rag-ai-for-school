@@ -16,7 +16,7 @@ const embeddings = new OpenAIEmbeddings({
 const chatModel = new ChatOpenAI({
   openAIApiKey: process.env.OPENAI_API_KEY,
   modelName: 'gpt-4o-mini',
-  temperature: 0.2,
+  temperature: 0.1, // Lower temperature for more accurate, consistent answers
   streaming: true,
 });
 
@@ -29,8 +29,8 @@ interface MatchDocumentsResult {
 
 async function matchDocuments(
   queryEmbedding: number[],
-  matchThreshold: number = 0.01,
-  matchCount: number = 15
+  matchThreshold: number = 0.3,
+  matchCount: number = 5
 ): Promise<MatchDocumentsResult[]> {
   console.log('Calling match_documents_v2 with threshold:', matchThreshold, 'count:', matchCount);
   console.log('Embedding length:', queryEmbedding.length);
@@ -57,11 +57,11 @@ async function matchDocuments(
     
     if (!data || data.length === 0) {
       console.log('No results from vector search, using text search fallback...');
-      // Fallback: search by text content for keywords
+      // Fallback: search by text content - limit to 3 to avoid irrelevant results
       const { data: fallbackData } = await supabase
         .from('documents')
         .select('id, content, metadata')
-        .limit(matchCount);
+        .limit(3);
       
       return (fallbackData || []).map((doc, idx) => ({
         ...doc,
@@ -73,11 +73,11 @@ async function matchDocuments(
   } catch (err) {
     console.error('Match documents error:', err);
     
-    // Fallback
+    // Fallback - limit to 3 to avoid irrelevant results
     const { data: fallbackData } = await supabase
       .from('documents')
       .select('id, content, metadata')
-      .limit(matchCount);
+      .limit(3);
     
     return (fallbackData || []).map((doc, idx) => ({
       ...doc,
@@ -94,8 +94,9 @@ function formatContext(docs: MatchDocumentsResult[]): string {
   return docs
     .map((doc, index) => {
       const metadata = doc.metadata as Record<string, string>;
+      const programCode = metadata.program_code ? `(${metadata.program_code})` : '';
       const programInfo = metadata.program_name
-        ? `[البرنامج: ${metadata.program_name}${metadata.institution ? ` - المؤسسة: ${metadata.institution}` : ''}]`
+        ? `[البرنامج: ${metadata.program_name} ${programCode}${metadata.institution ? ` - المؤسسة: ${metadata.institution}` : ''}]`
         : '';
       const sectionInfo = metadata.section ? `[القسم: ${metadata.section}]` : '';
       return `═══ مصدر ${index + 1} ${programInfo} ${sectionInfo} ═══\n${doc.content}\n(نسبة التطابق: ${(doc.similarity * 100).toFixed(0)}%)`;
@@ -117,8 +118,8 @@ export async function POST(request: NextRequest) {
     // Create embedding for the query
     const queryEmbedding = await embeddings.embedQuery(message);
 
-    // Retrieve relevant documents - use very low threshold to get more results
-    const relevantDocs = await matchDocuments(queryEmbedding, 0.01, 15);
+    // Retrieve relevant documents - use higher threshold for more accurate results
+    const relevantDocs = await matchDocuments(queryEmbedding, 0.3, 5);
 
     // Format context
     const context = formatContext(relevantDocs);
@@ -205,7 +206,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const queryEmbedding = await embeddings.embedQuery(question);
-    const relevantDocs = await matchDocuments(queryEmbedding, 0.01, 15);
+    const relevantDocs = await matchDocuments(queryEmbedding, 0.3, 5);
     const context = formatContext(relevantDocs);
 
     const fullSystemPrompt = SYSTEM_PROMPT.replace('{context}', context);

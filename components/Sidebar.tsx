@@ -5,40 +5,52 @@ import { useState } from 'react';
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
+  hideToggle?: boolean;
 }
 
-export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
+export default function Sidebar({ isOpen, onToggle, hideToggle }: SidebarProps) {
   const [conversations] = useState<{ id: string; title: string; date: string }[]>([]);
 
   return (
     <>
-      {/* Toggle button */}
-      <button
-        onClick={onToggle}
-        className="fixed top-4 left-4 z-50 p-2 rounded-xl bg-white/80 backdrop-blur-sm border border-stone-200/50 shadow-sm hover:bg-white transition-all duration-300"
-        aria-label={isOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
-      >
-        <svg
-          className={`w-5 h-5 text-stone-600 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+      {/* Toggle button - only show when sidebar is closed and not hidden by prop */}
+      {!isOpen && !hideToggle && (
+        <button
+          onClick={onToggle}
+          className="fixed top-4 right-4 z-50 p-2 rounded-xl bg-white/80 backdrop-blur-sm border border-stone-200/50 shadow-sm hover:bg-white transition-all duration-300"
+          aria-label="فتح القائمة"
         >
-          {isOpen ? (
+          <svg
+            className="w-5 h-5 text-stone-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          ) : (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          )}
-        </svg>
-      </button>
+          </svg>
+        </button>
+      )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full w-72 bg-stone-50/95 backdrop-blur-xl border-r border-stone-200/50 shadow-xl z-40 transform transition-transform duration-300 ease-out ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed top-0 right-0 h-full w-72 bg-stone-50/95 backdrop-blur-xl border-l border-stone-200/50 shadow-xl z-40 transform transition-transform duration-300 ease-out ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        <div className="flex flex-col h-full pt-16 pb-6 px-4">
+        <div className="flex flex-col h-full pt-6 pb-6 px-4">
+          {/* Close button inside sidebar (mobile/desktop) */}
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={onToggle}
+              className="p-2 rounded-xl hover:bg-stone-100 text-stone-600 transition-colors"
+              aria-label="إغلاق القائمة"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
           {/* New Chat Button */}
           <button className="flex items-center gap-3 w-full p-3 rounded-xl bg-gradient-to-r from-rose-100 to-purple-100 hover:from-rose-200 hover:to-purple-200 text-stone-700 font-medium transition-all duration-300 mb-6">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
