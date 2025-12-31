@@ -53,7 +53,7 @@ async function extractTextFromPDF(pdfPath: string): Promise<{ text: string; numP
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
     const pageText = textContent.items
-      .map((item: { str?: string }) => item.str || '')
+      .map((item: any) => ('str' in item ? item.str : ''))
       .join(' ');
     fullText += pageText + '\n';
     
