@@ -29,8 +29,8 @@ interface MatchDocumentsResult {
 
 async function matchDocuments(
   queryEmbedding: number[],
-  matchThreshold: number = 0.3,
-  matchCount: number = 5
+  matchThreshold: number = 0.35,
+  matchCount: number = 8
 ): Promise<MatchDocumentsResult[]> {
   console.log('Calling match_documents_v2 with threshold:', matchThreshold, 'count:', matchCount);
   console.log('Embedding length:', queryEmbedding.length);
@@ -118,8 +118,8 @@ export async function POST(request: NextRequest) {
     // Create embedding for the query
     const queryEmbedding = await embeddings.embedQuery(message);
 
-    // Retrieve relevant documents - use higher threshold for more accurate results
-    const relevantDocs = await matchDocuments(queryEmbedding, 0.3, 5);
+    // Retrieve relevant documents - balanced threshold for accuracy
+    const relevantDocs = await matchDocuments(queryEmbedding, 0.35, 8);
 
     // Format context
     const context = formatContext(relevantDocs);
@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const queryEmbedding = await embeddings.embedQuery(question);
-    const relevantDocs = await matchDocuments(queryEmbedding, 0.3, 5);
+    const relevantDocs = await matchDocuments(queryEmbedding, 0.35, 8);
     const context = formatContext(relevantDocs);
 
     const fullSystemPrompt = SYSTEM_PROMPT.replace('{context}', context);

@@ -19,7 +19,7 @@ todos:
     status: completed
   - id: test-accuracy
     content: اختبار دقة الإجابات بأسئلة عن برامج محددة
-    status: in_progress
+    status: completed
 ---
 
 # تحسين دقة نظام RAG AI
