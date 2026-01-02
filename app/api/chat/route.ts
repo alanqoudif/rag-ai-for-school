@@ -49,7 +49,11 @@ async function matchDocuments(
     }
 
     console.log('Match results count:', data?.length || 0);
-    return data || [];
+    // Map match_score to similarity for frontend compatibility
+    return (data || []).map((doc: any) => ({
+      ...doc,
+      similarity: doc.match_score || 0,
+    }));
   } catch (err) {
     console.error('Match documents error:', err);
     return [];
