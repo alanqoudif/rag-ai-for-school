@@ -43,18 +43,19 @@ interface ProgramChunk {
 function extractProgramName(text: string): string | undefined {
   // Try multiple patterns for program name
   const patterns = [
-    /اسم البرنامج[:\s]*([^\n*•]+)/,
-    /البرنامج[:\s]*([^\n*•]+)/,
-    /\d+\.\s*اسم البرنامج[:\s]*([^\n*•]+)/,
-    /\*\s*اسم البرنامج[:\s]*([^\n*•]+)/,
+    /(?:\d+\.\s*)?اسم البرنامج[:\s]*([^\n*•]+)/,
+    /(?:\d+\.\s*)?البرنامج[:\s]*([^\n*•]+)/,
+    /^\s*اسم البرنامج[:\s]*([^\n*•]+)/m,
   ];
   
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
-      const name = match[1].trim().replace(/^\d+\.\s*/, '').replace(/^\*\s*/, '');
-      // If name is too long or contains "رمز البرنامج", it's probably a failed match
-      if (name.length > 200 || name.includes('رمز البرنامج')) continue;
+      let name = match[1].trim();
+      // Clean up common prefixes/suffixes
+      name = name.replace(/^\d+\.\s*/, '').replace(/^\*\s*/, '');
+      // If name is too long or contains metadata, it's probably a failed match
+      if (name.length > 200 || name.includes('رمز البرنامج') || name.includes('الحد الأدنى')) continue;
       return name;
     }
   }
@@ -85,17 +86,18 @@ function extractProgramCode(text: string): string | undefined {
 // Extract institution from text block
 function extractInstitution(text: string): string | undefined {
   const patterns = [
-    /المؤسسة التعليمية[:\s]*([^\n•]+)/,
-    /المؤسســــة التعليميـــة[:\s]*([^\n•]+)/,
-    /جامعة\s+([^\n\-–•]+)/,
-    /كلية\s+([^\n\-–•]+)/,
+    /المؤسسة التعليمية[:\s/]*([^\n•\-|–]+)/,
+    /المؤسســــة التعليميـــة[:\s/]*([^\n•\-|–]+)/,
+    /(?:جامعة|كلية)\s+([^\n\-–•/]+)/,
   ];
   
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
-      const inst = match[1].trim();
-      if (inst.length > 100 || inst.includes('اسم البرنامج')) continue;
+      let inst = match[1].trim();
+      // Clean up common prefixes/suffixes
+      inst = inst.replace(/^[\s/]+/, '').replace(/[\s/]+$/, '');
+      if (inst.length > 100 || inst.length < 2 || inst.includes('اسم البرنامج')) continue;
       return inst;
     }
   }
