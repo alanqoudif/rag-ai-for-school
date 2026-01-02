@@ -22,11 +22,13 @@ export interface MatchDocumentsResult {
 
 export async function matchDocuments(
   queryEmbedding: number[],
-  matchThreshold: number = 0.5,
+  queryText: string,
+  matchThreshold: number = 0.2,
   matchCount: number = 10
 ): Promise<MatchDocumentsResult[]> {
-  const { data, error } = await supabase.rpc('match_documents', {
+  const { data, error } = await supabase.rpc('match_documents_hybrid', {
     query_embedding: queryEmbedding,
+    query_text: queryText,
     match_threshold: matchThreshold,
     match_count: matchCount,
   });

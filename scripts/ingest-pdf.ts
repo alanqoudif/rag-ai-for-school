@@ -100,17 +100,17 @@ function splitIntoChunks(text: string): ProgramChunk[] {
     for (const block of programBlocks) {
       if (block.trim().length < 100) continue;
       
-      // Extract program name
-      const programNameMatch = block.match(/اسم البرنامج[:\s]*([^\n*]+)/);
-      const programName = programNameMatch ? programNameMatch[1].trim() : undefined;
-      
-      // Extract program code
-      const programCodeMatch = block.match(/رمز البرنامج[:\s]*([^\n]+)/);
-      const programCode = programCodeMatch ? programCodeMatch[1].trim() : undefined;
-      
-      // Extract institution
-      const institutionMatch = block.match(/المؤسسة التعليمية[:\s]*([^\n]+)/);
-      const institution = institutionMatch ? institutionMatch[1].trim() : undefined;
+    // Extract program name
+    const programNameMatch = block.match(/(?:\d+\.\s*)?اسم البرنامج[:\s]*([^\n*•]+)/);
+    const programName = programNameMatch ? programNameMatch[1].trim() : undefined;
+    
+    // Extract program code
+    const programCodeMatch = block.match(/رمز البرنامج[:\s]*([^\n•]+)/);
+    const programCode = programCodeMatch ? programCodeMatch[1].trim() : undefined;
+    
+    // Extract institution
+    const institutionMatch = block.match(/المؤسسة التعليمية[:\s]*([^\n•]+)/);
+    const institution = institutionMatch ? institutionMatch[1].trim() : undefined;
       
       // If block is too long, split it further
       if (block.length > 2000) {

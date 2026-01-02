@@ -28,11 +28,11 @@ export async function createQueryEmbedding(query: string): Promise<number[]> {
 // Retrieve relevant documents based on query
 export async function retrieveRelevantDocs(
   query: string,
-  threshold: number = 0.3,
-  limit: number = 8
+  threshold: number = 0.2,
+  limit: number = 10
 ): Promise<MatchDocumentsResult[]> {
   const queryEmbedding = await createQueryEmbedding(query);
-  const docs = await matchDocuments(queryEmbedding, threshold, limit);
+  const docs = await matchDocuments(queryEmbedding, query, threshold, limit);
   return docs;
 }
 

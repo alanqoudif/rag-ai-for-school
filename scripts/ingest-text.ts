@@ -43,15 +43,18 @@ interface ProgramChunk {
 function extractProgramName(text: string): string | undefined {
   // Try multiple patterns for program name
   const patterns = [
-    /اسم البرنامج[:\s]*([^\n*]+)/,
-    /البرنامج[:\s]*([^\n*]+)/,
-    /\d+\.\s*اسم البرنامج[:\s]*([^\n*]+)/,
+    /اسم البرنامج[:\s]*([^\n*•]+)/,
+    /البرنامج[:\s]*([^\n*•]+)/,
+    /\d+\.\s*اسم البرنامج[:\s]*([^\n*•]+)/,
   ];
   
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
-      return match[1].trim().replace(/^\d+\.\s*/, '');
+      const name = match[1].trim().replace(/^\d+\.\s*/, '');
+      // If name is too long or contains "رمز البرنامج", it's probably a failed match
+      if (name.length > 100 || name.includes('رمز البرنامج')) continue;
+      return name;
     }
   }
   return undefined;
@@ -60,7 +63,7 @@ function extractProgramName(text: string): string | undefined {
 // Extract program code from text block
 function extractProgramCode(text: string): string | undefined {
   const patterns = [
-    /رمز البرنامج[:\s]*([^\n]+)/,
+    /رمز البرنامج[:\s]*([^\n•]+)/,
     /الرمز[:\s]*([A-Z]{2}\d{3})/,
     /([A-Z]{2}\d{3})/g,
   ];
@@ -68,9 +71,10 @@ function extractProgramCode(text: string): string | undefined {
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
-      // Extract all codes if multiple
-      const codes = match[1] || match[0];
-      return codes.trim();
+      const code = match[1] || match[0];
+      const trimmedCode = code.trim();
+      if (trimmedCode.length > 50 || trimmedCode.includes('الحد الأدنى')) continue;
+      return trimmedCode;
     }
   }
   return undefined;
@@ -79,16 +83,18 @@ function extractProgramCode(text: string): string | undefined {
 // Extract institution from text block
 function extractInstitution(text: string): string | undefined {
   const patterns = [
-    /المؤسسة التعليمية[:\s]*([^\n]+)/,
-    /المؤسســــة التعليميـــة[:\s]*([^\n]+)/,
-    /جامعة\s+([^\n\-–]+)/,
-    /كلية\s+([^\n\-–]+)/,
+    /المؤسسة التعليمية[:\s]*([^\n•]+)/,
+    /المؤسســــة التعليميـــة[:\s]*([^\n•]+)/,
+    /جامعة\s+([^\n\-–•]+)/,
+    /كلية\s+([^\n\-–•]+)/,
   ];
   
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
-      return match[1].trim();
+      const inst = match[1].trim();
+      if (inst.length > 100 || inst.includes('اسم البرنامج')) continue;
+      return inst;
     }
   }
   return undefined;

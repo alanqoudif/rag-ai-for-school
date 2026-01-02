@@ -29,18 +29,16 @@ interface MatchDocumentsResult {
 
 async function matchDocuments(
   queryEmbedding: number[],
-  matchThreshold: number = 0.35,
-  matchCount: number = 8
+  queryText: string,
+  matchThreshold: number = 0.2,
+  matchCount: number = 10
 ): Promise<MatchDocumentsResult[]> {
-  console.log('Calling match_documents_v2 with threshold:', matchThreshold, 'count:', matchCount);
-  console.log('Embedding length:', queryEmbedding.length);
-  
-  // Format embedding for pgvector - use proper vector literal format
-  const embeddingStr = `[${queryEmbedding.join(',')}]`;
+  console.log('Calling match_documents_hybrid with query:', queryText);
   
   try {
-    const { data, error } = await supabase.rpc('match_documents_v2', {
-      query_embedding: embeddingStr,
+    const { data, error } = await supabase.rpc('match_documents_hybrid', {
+      query_embedding: queryEmbedding,
+      query_text: queryText,
       match_threshold: matchThreshold,
       match_count: matchCount,
     });
@@ -51,38 +49,10 @@ async function matchDocuments(
     }
 
     console.log('Match results count:', data?.length || 0);
-    if (data && data.length > 0) {
-      console.log('Top similarities:', data.slice(0, 3).map((d: MatchDocumentsResult) => d.similarity));
-    }
-    
-    if (!data || data.length === 0) {
-      console.log('No results from vector search, using text search fallback...');
-      // Fallback: search by text content - limit to 3 to avoid irrelevant results
-      const { data: fallbackData } = await supabase
-        .from('documents')
-        .select('id, content, metadata')
-        .limit(3);
-      
-      return (fallbackData || []).map((doc, idx) => ({
-        ...doc,
-        similarity: 0.25 - idx * 0.01,
-      }));
-    }
-    
-    return data;
+    return data || [];
   } catch (err) {
     console.error('Match documents error:', err);
-    
-    // Fallback - limit to 3 to avoid irrelevant results
-    const { data: fallbackData } = await supabase
-      .from('documents')
-      .select('id, content, metadata')
-      .limit(3);
-    
-    return (fallbackData || []).map((doc, idx) => ({
-      ...doc,
-      similarity: 0.25 - idx * 0.01,
-    }));
+    return [];
   }
 }
 
@@ -119,7 +89,7 @@ export async function POST(request: NextRequest) {
     const queryEmbedding = await embeddings.embedQuery(message);
 
     // Retrieve relevant documents - balanced threshold for accuracy
-    const relevantDocs = await matchDocuments(queryEmbedding, 0.35, 8);
+    const relevantDocs = await matchDocuments(queryEmbedding, message, 0.2, 10);
 
     // Format context
     const context = formatContext(relevantDocs);
@@ -206,7 +176,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const queryEmbedding = await embeddings.embedQuery(question);
-    const relevantDocs = await matchDocuments(queryEmbedding, 0.35, 8);
+    const relevantDocs = await matchDocuments(queryEmbedding, question, 0.2, 10);
     const context = formatContext(relevantDocs);
 
     const fullSystemPrompt = SYSTEM_PROMPT.replace('{context}', context);
