@@ -287,6 +287,8 @@ export async function GET(request: NextRequest) {
   try {
     const analysis = await analyzeQuery(question);
     const optimizedQuery = analysis.search_query || question;
+    const queryEmbedding = await embeddings.embedQuery(optimizedQuery);
+
     // 3. Multi-stage retrieval strategy
     let relevantDocs: MatchDocumentsResult[] = [];
     const existingIds = new Set<number>();
