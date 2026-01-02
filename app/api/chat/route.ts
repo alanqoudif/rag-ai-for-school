@@ -20,6 +20,43 @@ const chatModel = new ChatOpenAI({
   streaming: true,
 });
 
+// Helper to analyze the query and extract key search terms
+async function analyzeQuery(query: string) {
+  const analysisModel = new ChatOpenAI({
+    openAIApiKey: process.env.OPENAI_API_KEY,
+    modelName: 'gpt-4o-mini',
+    temperature: 0,
+  });
+
+  const prompt = `أنت خبير في تحليل استفسارات القبول الموحد في سلطنة عمان.
+مهمتك هي استخراج أهم الكلمات المفتاحية للبحث في قاعدة البيانات من سؤال المستخدم.
+استخرج:
+1. اسم البرنامج (مثلاً: الهندسة المعمارية، الطب، إدارة الأعمال)
+2. اسم المؤسسة التعليمية (مثلاً: جامعة السلطان قابوس، جامعة صحار، كلية التقنية)
+3. رمز البرنامج إذا وجد (مثلاً: BS140، IG140)
+
+أجب فقط بصيغة JSON كالتالي:
+{
+  "program": "اسم البرنامج المستخرج أو null",
+  "university": "اسم الجامعة المستخرج أو null",
+  "code": "رمز البرنامج المستخرج أو null",
+  "search_query": "سلسلة نصية تحتوي على أهم الكلمات للبحث (مثلاً: اسم البرنامج + اسم الجامعة)"
+}
+
+السؤال: ${query}`;
+
+  try {
+    const response = await analysisModel.invoke(prompt);
+    const content = response.content as string;
+    // Handle potential markdown code blocks in response
+    const jsonStr = content.replace(/```json|```/g, '').trim();
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error('Error analyzing query:', e);
+    return { search_query: query };
+  }
+}
+
 interface MatchDocumentsResult {
   id: number;
   content: string;
@@ -89,16 +126,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create embedding for the query
-    const queryEmbedding = await embeddings.embedQuery(message);
+    // 1. Analyze the query to understand intent and extract keywords
+    const analysis = await analyzeQuery(message);
+    const optimizedQuery = analysis.search_query || message;
+    console.log('Optimized search query:', optimizedQuery);
 
-    // Retrieve relevant documents - balanced threshold for accuracy
-    const relevantDocs = await matchDocuments(queryEmbedding, message, 0.2, 10);
+    // 2. Create embedding for the optimized query
+    const queryEmbedding = await embeddings.embedQuery(optimizedQuery);
 
-    // Format context
+    // 3. Retrieve relevant documents using the optimized query and embedding
+    // We use a lower threshold (0.15) to be more inclusive, then let the LLM filter
+    let relevantDocs = await matchDocuments(queryEmbedding, optimizedQuery, 0.15, 10);
+
+    // 4. If we didn't find specific program but have a code/program name, try a second targeted search
+    if (relevantDocs.length < 3 && (analysis.code || analysis.program)) {
+      console.log('Few results found, trying secondary search for:', analysis.code || analysis.program);
+      const secondaryQuery = analysis.code || analysis.program;
+      const secondaryEmbedding = await embeddings.embedQuery(secondaryQuery);
+      const secondaryDocs = await matchDocuments(secondaryEmbedding, secondaryQuery, 0.15, 5);
+      
+      // Merge results avoiding duplicates
+      const existingIds = new Set(relevantDocs.map(d => d.id));
+      for (const doc of secondaryDocs) {
+        if (!existingIds.has(doc.id)) {
+          relevantDocs.push(doc);
+        }
+      }
+    }
+
+    // Sort by similarity descending
+    relevantDocs.sort((a, b) => b.similarity - a.similarity);
+
+    // 5. Format context
     const context = formatContext(relevantDocs);
 
-    // Create full prompt by combining system prompt and question template
+    // 6. Create full prompt by combining system prompt and question template
     const fullSystemPrompt = SYSTEM_PROMPT.replace('{context}', context);
     const formattedQuestion = QUESTION_TEMPLATE.replace('{question}', message);
     const finalPrompt = `${fullSystemPrompt}\n\n${formattedQuestion}`;
@@ -179,8 +241,26 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const queryEmbedding = await embeddings.embedQuery(question);
-    const relevantDocs = await matchDocuments(queryEmbedding, question, 0.2, 10);
+    const analysis = await analyzeQuery(question);
+    const optimizedQuery = analysis.search_query || question;
+    const queryEmbedding = await embeddings.embedQuery(optimizedQuery);
+    
+    let relevantDocs = await matchDocuments(queryEmbedding, optimizedQuery, 0.15, 10);
+    
+    if (relevantDocs.length < 3 && (analysis.code || analysis.program)) {
+      const secondaryQuery = analysis.code || analysis.program;
+      const secondaryEmbedding = await embeddings.embedQuery(secondaryQuery);
+      const secondaryDocs = await matchDocuments(secondaryEmbedding, secondaryQuery, 0.15, 5);
+      
+      const existingIds = new Set(relevantDocs.map(d => d.id));
+      for (const doc of secondaryDocs) {
+        if (!existingIds.has(doc.id)) {
+          relevantDocs.push(doc);
+        }
+      }
+    }
+
+    relevantDocs.sort((a, b) => b.similarity - a.similarity);
     const context = formatContext(relevantDocs);
 
     const fullSystemPrompt = SYSTEM_PROMPT.replace('{context}', context);

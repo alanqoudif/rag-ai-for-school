@@ -46,14 +46,15 @@ function extractProgramName(text: string): string | undefined {
     /اسم البرنامج[:\s]*([^\n*•]+)/,
     /البرنامج[:\s]*([^\n*•]+)/,
     /\d+\.\s*اسم البرنامج[:\s]*([^\n*•]+)/,
+    /\*\s*اسم البرنامج[:\s]*([^\n*•]+)/,
   ];
   
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
-      const name = match[1].trim().replace(/^\d+\.\s*/, '');
+      const name = match[1].trim().replace(/^\d+\.\s*/, '').replace(/^\*\s*/, '');
       // If name is too long or contains "رمز البرنامج", it's probably a failed match
-      if (name.length > 100 || name.includes('رمز البرنامج')) continue;
+      if (name.length > 200 || name.includes('رمز البرنامج')) continue;
       return name;
     }
   }
@@ -65,6 +66,7 @@ function extractProgramCode(text: string): string | undefined {
   const patterns = [
     /رمز البرنامج[:\s]*([^\n•]+)/,
     /الرمز[:\s]*([A-Z]{2}\d{3})/,
+    /\*\s*رمز البرنامج[:\s]*([^\n•]+)/,
     /([A-Z]{2}\d{3})/g,
   ];
   
@@ -72,7 +74,7 @@ function extractProgramCode(text: string): string | undefined {
     const match = text.match(pattern);
     if (match) {
       const code = match[1] || match[0];
-      const trimmedCode = code.trim();
+      const trimmedCode = code.trim().replace(/^\*\s*/, '');
       if (trimmedCode.length > 50 || trimmedCode.includes('الحد الأدنى')) continue;
       return trimmedCode;
     }
@@ -123,7 +125,7 @@ function splitIntoChunks(text: string): ProgramChunk[] {
 
   // Split by program blocks
   // Programs are typically separated by underscores or start with "اسم البرنامج" or numbered items
-  const programSeparators = /(?=(?:^|\n)(?:\d+\.\s*)?(?:اسم البرنامج|البرنامج)[:\s])|(?=(?:^|\n)قسم\s+[^\n]+)|(?:_{5,})/;
+  const programSeparators = /(?=(?:^|\n)(?:\d+\.\s*)?(?:\*\s*)?(?:اسم البرنامج|البرنامج)[:\s])|(?=(?:^|\n)قسم\s+[^\n]+)|(?:_{5,})/;
   
   const blocks = text.split(programSeparators);
 
@@ -250,7 +252,7 @@ function splitByProgramBlocks(text: string): ProgramChunk[] {
     }
 
     // Check for program name start
-    const programNameMatch = trimmedLine.match(/(?:\d+\.\s*)?اسم البرنامج[:\s]*(.+)$/);
+    const programNameMatch = trimmedLine.match(/(?:\d+\.\s*)?(?:\*\s*)?اسم البرنامج[:\s]*(.+)$/);
     if (programNameMatch) {
       flushBlock();
       currentProgramName = programNameMatch[1].trim();
@@ -259,7 +261,7 @@ function splitByProgramBlocks(text: string): ProgramChunk[] {
     }
 
     // Also check for البرنامج: pattern
-    const programMatch = trimmedLine.match(/^البرنامج[:\s]*(.+)$/);
+    const programMatch = trimmedLine.match(/^(?:\*\s*)?البرنامج[:\s]*(.+)$/);
     if (programMatch && !currentProgramName) {
       flushBlock();
       currentProgramName = programMatch[1].trim();
@@ -268,11 +270,11 @@ function splitByProgramBlocks(text: string): ProgramChunk[] {
     }
 
     // Check for program code
-    const codeMatch = trimmedLine.match(/رمز البرنامج[:\s]*(.+)$/);
+    const codeMatch = trimmedLine.match(/(?:\*\s*)?رمز البرنامج[:\s]*(.+)$/);
     if (codeMatch) {
       currentProgramCode = codeMatch[1].trim();
     }
-    const altCodeMatch = trimmedLine.match(/الرمز[:\s]*([A-Z]{2}\d{3})/);
+    const altCodeMatch = trimmedLine.match(/(?:\*\s*)?الرمز[:\s]*([A-Z]{2}\d{3})/);
     if (altCodeMatch) {
       currentProgramCode = altCodeMatch[1];
     }
@@ -336,6 +338,15 @@ async function ingestTextFile(filePath: string) {
 
   console.log('\n🧠 Creating embeddings and storing in Supabase...');
   
+  // Clear existing documents first
+  console.log('🧹 Clearing existing documents from database...');
+  const { error: deleteError } = await supabase.from('documents').delete().neq('id', 0);
+  if (deleteError) {
+    console.error('❌ Error clearing database:', deleteError.message);
+    process.exit(1);
+  }
+  console.log('✅ Database cleared.');
+
   let successCount = 0;
   let errorCount = 0;
   

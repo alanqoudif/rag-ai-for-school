@@ -14,7 +14,7 @@ export const embeddings = new OpenAIEmbeddings({
 // Initialize OpenAI chat model
 export const chatModel = new ChatOpenAI({
   openAIApiKey: process.env.OPENAI_API_KEY,
-  modelName: 'gpt-4.1-nano',
+  modelName: 'gpt-4o-mini',
   temperature: 0.1,
   streaming: true,
 });
