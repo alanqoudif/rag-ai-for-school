@@ -25,14 +25,19 @@ export async function createQueryEmbedding(query: string): Promise<number[]> {
   return embedding;
 }
 
-// Retrieve relevant documents based on query
+// Retrieve relevant documents based on query with multi-stage strategy
 export async function retrieveRelevantDocs(
   query: string,
-  threshold: number = 0.2,
+  threshold: number = 0.1,
   limit: number = 10
 ): Promise<MatchDocumentsResult[]> {
+  // 1. Analyze query to get program and university
   const queryEmbedding = await createQueryEmbedding(query);
+  
+  // 2. Perform searches
+  // This is a simplified version of the logic in route.ts
   const docs = await matchDocuments(queryEmbedding, query, threshold, limit);
+  
   return docs;
 }
 

@@ -29,18 +29,23 @@ async function analyzeQuery(query: string) {
   });
 
   const prompt = `أنت خبير في تحليل استفسارات القبول الموحد في سلطنة عمان.
-مهمتك هي استخراج أهم الكلمات المفتاحية للبحث في قاعدة البيانات من سؤال المستخدم.
+مهمتك هي تفكيك سؤال المستخدم لاستخراج عناصر البحث بدقة متناهية.
 استخرج:
-1. اسم البرنامج (مثلاً: الهندسة المعمارية، الطب، إدارة الأعمال)
-2. اسم المؤسسة التعليمية (مثلاً: جامعة السلطان قابوس، جامعة صحار، كلية التقنية)
+1. اسم البرنامج (مثلاً: الهندسة المعمارية، الطب، إدارة الأعمال، تربية تقنية معلومات)
+2. اسم المؤسسة التعليمية (مثلاً: جامعة السلطان قابوس، جامعة صحار، كلية التقنية، جامعة ظفار)
 3. رمز البرنامج إذا وجد (مثلاً: BS140، IG140)
+
+قواعد التحليل:
+- إذا كان هناك تخصص فرعي، ضمه لاسم البرنامج (مثلاً: "تربية تقنية معلومات" وليس فقط "تربية").
+- استبعد الكلمات الزائدة مثل "ما هي"، "أريد"، "شروط"، "بكالوريوس" إلا إذا كانت جزءاً أصيلاً من مسمى التخصص.
+- إذا لم يذكر المستخدم مؤسسة، اجعلها null.
 
 أجب فقط بصيغة JSON كالتالي:
 {
-  "program": "اسم البرنامج المستخرج أو null",
+  "program": "اسم البرنامج الدقيق المستخرج (مثلاً: تقنية المعلومات)",
   "university": "اسم الجامعة المستخرج أو null",
   "code": "رمز البرنامج المستخرج أو null",
-  "search_query": "سلسلة نصية تحتوي على الكلمات الأساسية فقط بدون حروف جر أو كلمات زائدة (مثلاً: اسم البرنامج اسم الجامعة)"
+  "search_query": "سلسلة نصية مثالية للبحث تحتوي على (اسم البرنامج + الجامعة) بدون كلمات ربط"
 }
 
 السؤال: ${query}`;
@@ -106,11 +111,16 @@ function formatContext(docs: MatchDocumentsResult[]): string {
     .map((doc, index) => {
       const metadata = doc.metadata as Record<string, string>;
       const programCode = metadata.program_code ? `(${metadata.program_code})` : '';
-      const programInfo = metadata.program_name
-        ? `[البرنامج: ${metadata.program_name} ${programCode}${metadata.institution ? ` - المؤسسة: ${metadata.institution}` : ''}]`
-        : '';
-      const sectionInfo = metadata.section ? `[القسم: ${metadata.section}]` : '';
-      return `═══ مصدر ${index + 1} ${programInfo} ${sectionInfo} ═══\n${doc.content}\n(نسبة التطابق: ${(doc.similarity * 100).toFixed(0)}%)`;
+      const institution = metadata.institution || 'غير محدد';
+      const programName = metadata.program_name || 'غير محدد';
+      
+      return `═══ مصدر ${index + 1} ═══
+اسم المؤسسة التعليمية: ${institution}
+اسم البرنامج الدراسي: ${programName} ${programCode}
+القسم: ${metadata.section || 'عام'}
+المحتوى والشروط:
+${doc.content}
+(نسبة التطابق مع البحث: ${(doc.similarity * 100).toFixed(0)}%)`;
     })
     .join('\n\n────────────────────────────────────\n\n');
 }
@@ -134,28 +144,62 @@ export async function POST(request: NextRequest) {
     // 2. Create embedding for the optimized query
     const queryEmbedding = await embeddings.embedQuery(optimizedQuery);
 
-    // 3. Retrieve relevant documents using the optimized query and embedding
-    // We use a lower threshold (0.15) to be more inclusive, then let the LLM filter
-    let relevantDocs = await matchDocuments(queryEmbedding, optimizedQuery, 0.15, 10);
+    // 3. Multi-stage retrieval strategy
+    let relevantDocs: MatchDocumentsResult[] = [];
+    const existingIds = new Set<number>();
 
-    // 4. If we didn't find specific program but have a code/program name, try a second targeted search
-    if (relevantDocs.length < 3 && (analysis.code || analysis.program)) {
-      console.log('Few results found, trying secondary search for:', analysis.code || analysis.program);
-      const secondaryQuery = analysis.code || analysis.program;
-      const secondaryEmbedding = await embeddings.embedQuery(secondaryQuery);
-      const secondaryDocs = await matchDocuments(secondaryEmbedding, secondaryQuery, 0.15, 5);
-      
-      // Merge results avoiding duplicates
-      const existingIds = new Set(relevantDocs.map(d => d.id));
-      for (const doc of secondaryDocs) {
+    const addDocs = (docs: MatchDocumentsResult[]) => {
+      for (const doc of docs) {
         if (!existingIds.has(doc.id)) {
           relevantDocs.push(doc);
+          existingIds.add(doc.id);
         }
       }
+    };
+
+    // Stage 1: Full optimized query (Primary search)
+    console.log('Stage 1: Searching for full query:', optimizedQuery);
+    const stage1Docs = await matchDocuments(queryEmbedding, optimizedQuery, 0.1, 8);
+    addDocs(stage1Docs);
+
+    // Stage 2: Program name search (if available and we need more results or want broader context)
+    if (analysis.program && analysis.program !== optimizedQuery) {
+      console.log('Stage 2: Searching for program name only:', analysis.program);
+      const progEmbedding = await embeddings.embedQuery(analysis.program);
+      const stage2Docs = await matchDocuments(progEmbedding, analysis.program, 0.1, 5);
+      addDocs(stage2Docs);
     }
 
-    // Sort by similarity descending
-    relevantDocs.sort((a, b) => b.similarity - a.similarity);
+    // Stage 3: Program code search (if available)
+    if (analysis.code) {
+      console.log('Stage 3: Searching for program code only:', analysis.code);
+      const codeEmbedding = await embeddings.embedQuery(analysis.code);
+      const stage3Docs = await matchDocuments(codeEmbedding, analysis.code, 0.05, 5);
+      addDocs(stage3Docs);
+    }
+
+    // Stage 4: If still very few results, try university search
+    if (relevantDocs.length < 5 && analysis.university) {
+      console.log('Stage 4: Searching for university name only:', analysis.university);
+      const uniEmbedding = await embeddings.embedQuery(analysis.university);
+      const stage4Docs = await matchDocuments(uniEmbedding, analysis.university, 0.1, 5);
+      addDocs(stage4Docs);
+    }
+
+    // Sort by similarity descending, but prioritize those that matched the program name if we have one
+    relevantDocs.sort((a, b) => {
+      // If we have a program name, check if it's in the content
+      if (analysis.program) {
+        const aMatchesProg = a.content.includes(analysis.program);
+        const bMatchesProg = b.content.includes(analysis.program);
+        if (aMatchesProg && !bMatchesProg) return -1;
+        if (!aMatchesProg && bMatchesProg) return 1;
+      }
+      return b.similarity - a.similarity;
+    });
+
+    // Limit to top 12 results for context
+    relevantDocs = relevantDocs.slice(0, 12);
 
     // 5. Format context
     const context = formatContext(relevantDocs);
@@ -243,25 +287,49 @@ export async function GET(request: NextRequest) {
   try {
     const analysis = await analyzeQuery(question);
     const optimizedQuery = analysis.search_query || question;
-    const queryEmbedding = await embeddings.embedQuery(optimizedQuery);
-    
-    let relevantDocs = await matchDocuments(queryEmbedding, optimizedQuery, 0.15, 10);
-    
-    if (relevantDocs.length < 3 && (analysis.code || analysis.program)) {
-      const secondaryQuery = analysis.code || analysis.program;
-      const secondaryEmbedding = await embeddings.embedQuery(secondaryQuery);
-      const secondaryDocs = await matchDocuments(secondaryEmbedding, secondaryQuery, 0.15, 5);
-      
-      const existingIds = new Set(relevantDocs.map(d => d.id));
-      for (const doc of secondaryDocs) {
+    // 3. Multi-stage retrieval strategy
+    let relevantDocs: MatchDocumentsResult[] = [];
+    const existingIds = new Set<number>();
+
+    const addDocs = (docs: MatchDocumentsResult[]) => {
+      for (const doc of docs) {
         if (!existingIds.has(doc.id)) {
           relevantDocs.push(doc);
+          existingIds.add(doc.id);
         }
       }
+    };
+
+    // Stage 1: Full optimized query
+    const stage1Docs = await matchDocuments(queryEmbedding, optimizedQuery, 0.1, 8);
+    addDocs(stage1Docs);
+
+    // Stage 2: Program name only
+    if (analysis.program && analysis.program !== optimizedQuery) {
+      const progEmbedding = await embeddings.embedQuery(analysis.program);
+      const stage2Docs = await matchDocuments(progEmbedding, analysis.program, 0.1, 5);
+      addDocs(stage2Docs);
     }
 
-    relevantDocs.sort((a, b) => b.similarity - a.similarity);
-    const context = formatContext(relevantDocs);
+    // Stage 3: Program code
+    if (analysis.code) {
+      const codeEmbedding = await embeddings.embedQuery(analysis.code);
+      const stage3Docs = await matchDocuments(codeEmbedding, analysis.code, 0.05, 5);
+      addDocs(stage3Docs);
+    }
+
+    // Sort and format
+    relevantDocs.sort((a, b) => {
+      if (analysis.program) {
+        const aMatchesProg = a.content.includes(analysis.program);
+        const bMatchesProg = b.content.includes(analysis.program);
+        if (aMatchesProg && !bMatchesProg) return -1;
+        if (!aMatchesProg && bMatchesProg) return 1;
+      }
+      return b.similarity - a.similarity;
+    });
+
+    const context = formatContext(relevantDocs.slice(0, 12));
 
     const fullSystemPrompt = SYSTEM_PROMPT.replace('{context}', context);
     const formattedQuestion = QUESTION_TEMPLATE.replace('{question}', question);
